@@ -1,0 +1,493 @@
+
+Part 2 — Qualification &amp; Lead Scoring Engine
+1. Purpose
+The Qualification &amp; Lead Scoring Engine evaluates a completed customer conversation and determines:
+Whether the lead is Qualified or Not Qualified
+If Qualified, the Lead Score between 1 and 100
+If Qualified, the Lead Temperature:
+Cold
+Warm
+Hot
+Very Hot
+The engine uses the Qualification Template associated with the chatbot agent, inbound calling agent, outbound calling agent, or campaign.
+The same engine must work across different industries, business models, customer types, and conversation channels.
+
+2. Engine Input
+The engine uses two primary inputs:
+A. Conversation Data
+The completed conversation or call transcript.
+The transcript is the source of evidence about what the customer actually said or communicated.
+B. Qualification Template
+The Qualification Template provides the business rules configured by the client.
+The engine uses:
+Campaign / Agent Objective
+Qualified Lead requirements
+Business / Qualification Attributes
+Positive Signals
+Disqualification criteria
+Temperature ranges
+The engine must not depend on an existing lead score, existing outcome, or sentiment result.
+
+3. Overall Engine Flow
+The engine follows the below business flow:
+Conversation / Transcript
+↓
+Understand Customer Conversation
+↓
+Identify Relevant Evidence
+↓
+Check Disqualification
+↓
+Evaluate Qualification Requirements
+↓
+Determine Qualified / Not Qualified
+↓
+If Not Qualified
+Outcome = Negative
+Processing ends.
+If Qualified
+↓
+Evaluate Interest &amp; Buying Intent
+↓
+Calculate Lead Score (1–100)
+↓
+Apply Temperature Range
+↓
+Assign Cold / Warm / Hot / Very Hot
+↓
+Final Lead Result
+
+4. Conversation Understanding
+The engine first evaluates the meaning of the conversation.
+It identifies information relevant to the attached Qualification Template, including:
+Customer need
+Customer requirement
+Relevant use case
+Product/service interest
+Purchase or usage intention
+Timing
+Budget
+Quantity
+Other configured business attributes
+Commercial discussions
+Questions asked by the customer
+Requested next steps
+Positive signals
+Disqualification signals
+The engine should evaluate the meaning and context of the conversation rather than relying only on exact words.
+Example
+Configured Positive Signal:
+☐ Price enquiry
+Customer says:
+“How much would this cost?”
+This should be recognized as a Price Enquiry.
+The customer does not need to use the exact phrase “price enquiry.”
+
+5. Campaign / Agent Objective
+The Campaign / Agent Objective provides the overall context for the evaluation.
+Example:
+“Identify customers who are genuinely interested in purchasing our products and are likely to take the next step.”
+The engine uses this objective to understand the overall purpose of the conversation evaluation.
+The objective provides context; the actual qualification decision is made using the configured qualification and disqualification criteria.
+
+6. Disqualification Evaluation
+The engine first checks whether the conversation clearly establishes any configured disqualification condition.
+Examples:
+Explicitly not interested
+No requirement
+Wrong customer / profile
+Requirement outside our offering
+Outside service area
+Not the intended customer
+Requirement does not match our offering
+Requests no further contact
+Custom disqualification
+If a disqualification condition is clearly established
+The result is:
+Qualification = Not Qualified
+Outcome = Negative
+The lead does not proceed to temperature classification.
+Important
+A negative signal must be supported by the actual conversation.
+The engine should not assume that a customer is disqualified merely because a particular piece of information was not mentioned.
+
+7. Qualification Evaluation
+If no configured disqualification condition is established, the engine evaluates the Qualified Lead requirements.
+The engine supports three qualification methods configured in the Qualification Template.
+
+7.1 Essential + Supporting
+When Essential + Supporting is selected:
+Every Essential requirement must be satisfied.
+Supporting requirements are additional evidence.
+Supporting requirements are not mandatory for qualification.
+Example
+Requirement
+Importance
+Genuine need / requirement
+Essential
+Relevant use case
+Essential
+Specific requirement
+Supporting
+Future requirement
+Supporting
+If the conversation establishes:
+✓ Genuine need / requirement✓ Relevant use case✓ Specific requirement
+but does not establish Future requirement:
+Result = Qualified
+because all Essential requirements have been satisfied.
+Supporting requirements may subsequently contribute to the strength of the lead.
+
+7.2 Any Selected Requirement
+When Any selected requirement is selected:
+The lead can be Qualified when at least one selected qualification requirement is clearly established in the conversation, provided that no disqualification condition applies.
+Example
+Selected:
+☑ Product / service interest☑ Price enquiry☑ Demo request
+Customer says:
+“Yes, I’m interested in your product.”
+Result:
+Qualified
+because one selected qualification requirement has been satisfied.
+
+7.3 All Selected Requirements
+When All selected requirements is selected:
+Every selected qualification requirement must be established in the conversation.
+Example
+Selected:
+☑ Genuine need / requirement☑ Relevant use case☑ Purchase / use intention
+Customer demonstrates:
+✓ Genuine need✓ Relevant use case✗ Purchase intention not established
+Result:
+Not Qualified
+
+8. Business / Qualification Attributes
+The engine evaluates Business / Qualification Attributes configured by the client.
+Only attributes marked:
+Qualification Relevant = Yes
+are used as part of qualification.
+Attributes marked:
+No — Information only
+are captured as useful customer information but do not affect qualification.
+
+8.1 Attribute Evaluation
+The engine identifies the customer’s value for a configured attribute from the conversation and compares it with the qualification requirement configured by the client.
+Example
+Attribute:
+Budget
+Data Type:
+Amount / Currency
+Qualification Relevant:
+Yes
+Importance:
+Essential
+Relevant Range:
+₹1,00,000 – ₹5,00,000
+Customer says:
+“We have a budget of around three lakh.”
+The engine identifies:
+Budget = approximately ₹3,00,000
+The value falls within the configured range.
+Therefore:
+Budget requirement = Satisfied
+
+9. Insufficient Evidence
+The engine must distinguish between:
+Not Qualified
+The conversation provides evidence that the lead does not satisfy the qualification requirements.
+Qualified
+The conversation provides sufficient evidence that the qualification requirements are satisfied.
+Insufficient Evidence
+The conversation does not contain enough information to establish qualification.
+When insufficient evidence is encountered, the engine follows the client’s configured setting under Disqualification.
+Default Behaviour
+Do not automatically qualify
+Therefore:
+Insufficient evidence → Not Qualified
+This prevents the platform from treating an unclear or incomplete conversation as a positive lead.
+If the client has enabled:
+Allow overall conversation assessment
+the engine may use the overall conversation to determine whether the customer nevertheless demonstrates sufficient evidence of qualification.
+
+10. Qualification Result
+After evaluating the qualification requirements, the engine produces one of two primary results:
+Qualified
+The conversation satisfies the configured qualification conditions.
+Not Qualified
+The conversation does not satisfy the configured qualification conditions, or a configured disqualification condition has been established.
+
+11. Positive Signal Evaluation
+Positive Signals are evaluated primarily for a lead that has passed qualification.
+The engine identifies which configured signals are demonstrated in the conversation.
+Examples include:
+Interest
+Expresses interest
+Asks for more information
+Describes a requirement
+Asks about product/service suitability
+Asks about available options
+Commercial Interest
+Price enquiry
+Quotation request
+Availability enquiry
+Budget discussion
+Quantity discussion
+Package / plan discussion
+Payment / terms discussion
+Next Step
+Callback request
+Meeting request
+Demo request
+Visit request
+Catalogue / details request
+Sample request
+Proposal request
+Purchase / order intention
+Booking / sign-up intention
+Timing
+Immediate requirement
+Requirement within a defined period
+Future requirement
+Specific purchase / usage date
+Custom signals configured by the client are evaluated in the same manner.
+
+12. Lead Score
+The Lead Score represents the strength of the qualified lead.
+The score is always between:
+1 and 100
+The score is generated only after the lead has been determined to be Qualified.
+A Not Qualified lead does not require a lead temperature.
+
+13. How the Score Is Determined
+The engine evaluates the strength of the evidence found in the conversation.
+The primary areas considered are:
+Requirement
+How clearly has the customer demonstrated a genuine requirement?
+Interest
+How strongly and actively is the customer showing interest?
+Commercial Intent
+Has the customer moved into commercial discussions such as:
+Price
+Budget
+Quantity
+Package
+Payment terms
+Quotation
+Proposal
+Next-Step Intent
+Has the customer indicated a desire to take a next step such as:
+Receiving information
+Callback
+Meeting
+Demo
+Visit
+Quotation
+Purchase
+Booking
+Another configured next step
+Timing
+How close is the customer to taking action?
+For example:
+Future
+Undefined
+Defined period
+Near-term
+Immediate
+The engine combines the evidence from these areas and produces the final Lead Score between 1 and 100.
+
+14. Score Calculation Principle
+The client does not enter numerical weights for individual qualification requirements or positive signals.
+The platform maintains the underlying scoring model centrally.
+This means the client configures business meaning, while the platform determines how that evidence translates into a consistent score.
+For example:
+A customer who only expresses general interest should receive a lower score than a customer who:
+Has a specific requirement
+Discusses price
+Provides quantity
+Has a defined timeline
+Requests a quotation
+Indicates an intention to purchase
+The stronger the demonstrated intent, the higher the resulting score.
+
+15. Score and Temperature Are Different
+The Lead Score and Lead Temperature are separate concepts.
+Lead Score
+A numerical measurement:
+1–100
+It provides a more granular representation of lead strength.
+Lead Temperature
+A category based on the score:
+Cold / Warm / Hot / Very Hot
+Temperature is therefore assigned after the score has been calculated.
+
+16. Temperature Assignment
+The engine compares the final Lead Score with the configured Temperature Range.
+Standard Temperature Ranges
+Temperature
+Score Range
+Cold
+1–39
+Warm
+40–59
+Hot
+60–79
+Very Hot
+80–100
+Example
+Score = 28
+→ Cold
+Score = 47
+→ Warm
+Score = 72
+→ Hot
+Score = 91
+→ Very Hot
+
+17. Customized Temperature Ranges
+If the client chooses:
+Customize temperature ranges
+the engine uses the ranges configured in that Qualification Template.
+For example:
+Temperature
+Score Range
+Cold
+1–29
+Warm
+30–54
+Hot
+55–79
+Very Hot
+80–100
+The underlying score calculation does not change.
+Only the mapping between the score and temperature changes.
+The configured ranges must cover the complete 1–100 score range without gaps or overlaps.
+
+18. Final Outcome
+The engine produces the following final classification.
+Not Qualified
+Qualification: Not QualifiedOutcome: Negative
+Lead temperature is not required.
+Qualified
+Qualification: QualifiedOutcome: PositiveLead Score: 73Lead Temperature: Hot
+
+19. Complete Decision Flow
+The complete business mechanism is:
+1. Conversation
+↓
+2. Understand the customer’s statements
+↓
+3. Identify qualification, disqualification, attributes and positive signals
+↓
+4. Check for configured disqualification
+↓
+If established:
+NOT QUALIFIED → NEGATIVE
+Otherwise:
+↓
+5. Evaluate Qualified Lead requirements
+↓
+Apply:
+Essential + Supporting
+Any Selected
+All Selected
+↓
+6. Evaluate relevant Business / Qualification Attributes
+↓
+7. Determine Qualification
+If Not Qualified
+NOT QUALIFIED → NEGATIVE
+If Qualified
+↓
+8. Evaluate strength of interest and intent
+↓
+9. Calculate Lead Score
+1–100
+↓
+10. Apply configured Temperature Range
+↓
+11. Assign Temperature
+Cold / Warm / Hot / Very Hot
+↓
+12. Final Result
+Qualified + Score + Temperature + Positive Outcome
+
+20. Examples
+Example 1 — Not Qualified
+Customer:
+“No, I’m not interested. Please don’t contact me again.”
+Engine identifies:
+Explicitly not interested
+Requests no further contact
+Result:
+Not QualifiedOutcome: Negative
+
+Example 2 — Qualified / Cold
+Customer:
+“We may need something like this in the future. I’m just exploring options at the moment.”
+Result:
+QualifiedLead Score: 28Temperature: ColdOutcome: Positive
+
+Example 3 — Qualified / Warm
+Customer:
+“Yes, we have a requirement. I’d like to understand the options and discuss it internally before deciding.”
+Result:
+QualifiedLead Score: 53Temperature: WarmOutcome: Positive
+
+Example 4 — Qualified / Hot
+Customer:
+“We need this for our business. What are the pricing options? Can someone from your sales team discuss this with me?”
+Result:
+QualifiedLead Score: 68Temperature: HotOutcome: Positive
+
+Example 5 — Qualified / Very Hot
+Customer:
+“We need 200 units immediately. Please send the quotation today. If everything is fine, we’ll place the order this week.”
+Result:
+QualifiedLead Score: 91Temperature: Very HotOutcome: Positive
+
+21. Core Business Rules
+The following rules define the Qualification &amp; Lead Scoring Engine:
+The engine evaluates the conversation against the attached Qualification Template.
+Qualification and lead scoring are separate decisions.
+Disqualification conditions are evaluated before final qualification.
+A clearly established disqualification results in Not Qualified.
+Qualification requirements are evaluated according to the configured qualification method.
+Essential requirements must be satisfied when Essential + Supporting is selected.
+At least one requirement must be satisfied when Any Selected Requirement is selected.
+Every selected requirement must be satisfied when All Selected Requirements is selected.
+Only Qualification-Relevant Business Attributes affect qualification.
+Information-only attributes do not affect qualification.
+Positive Signals provide evidence of customer interest and buying intent.
+Only Qualified leads proceed to lead scoring and temperature assignment.
+The Lead Score is always between 1 and 100.
+The platform controls the underlying scoring model; clients configure business criteria rather than numerical weights.
+Lead Temperature is derived from the Lead Score.
+Temperature ranges are configurable by the client.
+Temperature ranges must cover the complete 1–100 range without gaps or overlaps.
+Insufficient evidence must not automatically result in a positive qualification under the default configuration.
+The engine evaluates the meaning and context of customer statements rather than relying only on exact words.
+The same conversation evaluated against the same Qualification Template should produce a consistent qualification and scoring result.
+
+22. Fundamental Model
+The Qualification &amp; Lead Scoring Engine can be represented by the following business model:
+Conversation
+What did the customer say?
+↓
+Evidence
+What does the conversation establish?
+↓
+Qualification
+Does the customer meet the configured qualification criteria?
+↓
+Lead Score
+How strong is the customer’s demonstrated interest and intent?
+↓
+Temperature
+Which configured score range does the lead fall into?
+↓
+Final Classification
+Qualified / Not Qualified
++
+Score 1–100
++
+Cold / Warm / Hot / Very Hot
