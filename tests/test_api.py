@@ -33,6 +33,8 @@ def test_evaluate_persists_and_is_retrievable(client: TestClient, tenant_headers
     assert created.status_code == 201, created.text
     body = created.json()
     assert body["qualified"] is True
+    assert body["disposition"] == "DEMO_REQUESTED"
+    assert body["next_action"] == "follow_up_on_requested_next_step"
     assert body["temperature"] is not None
     assert len(body["trace"]) == 10
 

@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from app.domain.enums import EvidenceLevel, Outcome, PipelineStep, QualificationStatus
+from app.domain.enums import (
+    Disposition,
+    EvidenceLevel,
+    NextAction,
+    Outcome,
+    PipelineStep,
+    QualificationStatus,
+)
 from app.domain.matching import MatchResult
 from app.domain.results import (
     AttributeOutcome,
@@ -54,6 +61,8 @@ class EvaluationContext:
 
     status: QualificationStatus = QualificationStatus.NOT_QUALIFIED
     outcome: Outcome = Outcome.NEGATIVE
+    disposition: Disposition = Disposition.UNQUALIFIED
+    next_action: NextAction = NextAction.NURTURE_OR_MANUAL_REVIEW
     evidence_level: EvidenceLevel = EvidenceLevel.SUFFICIENT
     score: int = 0
     temperature: str | None = None

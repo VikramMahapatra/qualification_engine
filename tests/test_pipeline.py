@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from app.domain.enums import (
+    Disposition,
     EvidenceLevel,
+    NextAction,
     Outcome,
     PipelineStep,
     QualificationStatus,
@@ -41,6 +43,8 @@ def test_strong_commercial_conversation_is_qualified_and_very_hot():
     assert result.qualified is True
     assert result.status is QualificationStatus.QUALIFIED
     assert result.outcome is Outcome.POSITIVE
+    assert result.disposition is Disposition.DEMO_REQUESTED
+    assert result.next_action is NextAction.FOLLOW_UP_ON_REQUESTED_NEXT_STEP
     assert result.temperature == "Very Hot"
     assert result.score >= 80
     assert result.attributes.outcomes[0].value == 300000.0
@@ -60,6 +64,8 @@ def test_hard_disqualification_short_circuits_the_flow():
 
     assert result.qualified is False
     assert result.outcome is Outcome.NEGATIVE
+    assert result.disposition is Disposition.NOT_INTERESTED
+    assert result.next_action is NextAction.SUPPRESS_CONTACT
     assert result.score == 0
     assert result.temperature is None
     assert [d.key for d in result.disqualifications] == ["not_interested"]
@@ -74,6 +80,8 @@ def test_insufficient_evidence_does_not_qualify_by_default():
     assert result.qualified is False
     assert result.outcome is Outcome.NEGATIVE
     assert result.evidence_level is EvidenceLevel.INSUFFICIENT
+    assert result.disposition is Disposition.NEEDS_INFORMATION
+    assert result.next_action is NextAction.REQUEST_MORE_INFORMATION
     assert "insufficient evidence" in result.summary.lower()
 
 

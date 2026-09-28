@@ -76,6 +76,33 @@ class Outcome(StrEnum):
     NEGATIVE = "negative"
 
 
+class Disposition(StrEnum):
+    NEW = "NEW"
+    QUALIFIED = "QUALIFIED"
+    UNQUALIFIED = "UNQUALIFIED"
+    NEEDS_INFORMATION = "NEEDS_INFORMATION"
+    SALES_FOLLOW_UP = "SALES_FOLLOW_UP"
+    DEMO_REQUESTED = "DEMO_REQUESTED"
+    NURTURE = "NURTURE"
+    CONTACTED = "CONTACTED"
+    NO_RESPONSE = "NO_RESPONSE"
+    NOT_INTERESTED = "NOT_INTERESTED"
+    BUDGET_NOT_AVAILABLE = "BUDGET_NOT_AVAILABLE"
+    TIMING_NOT_RIGHT = "TIMING_NOT_RIGHT"
+    DISQUALIFIED = "DISQUALIFIED"
+    DUPLICATE = "DUPLICATE"
+    CONVERTED = "CONVERTED"
+    LOST = "LOST"
+
+
+class NextAction(StrEnum):
+    FOLLOW_UP_ON_REQUESTED_NEXT_STEP = "follow_up_on_requested_next_step"
+    SALES_FOLLOW_UP = "sales_follow_up"
+    REQUEST_MORE_INFORMATION = "request_more_information"
+    SUPPRESS_CONTACT = "suppress_contact"
+    NURTURE_OR_MANUAL_REVIEW = "nurture_or_manual_review"
+
+
 class EvaluationStatus(StrEnum):
     PENDING = "pending"
     COMPLETED = "completed"

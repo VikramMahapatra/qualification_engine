@@ -125,6 +125,8 @@ class QualificationPipeline:
             status=context.status,
             qualified=context.status is QualificationStatus.QUALIFIED,
             outcome=context.outcome,
+            disposition=context.disposition,
+            next_action=context.next_action,
             evidence_level=context.evidence_level,
             score=context.score,
             temperature=context.temperature,

@@ -412,6 +412,8 @@ The response contains the decision, score, temperature, evidence, breakdown, and
   "status": "qualified",
   "qualified": true,
   "outcome": "positive",
+  "disposition": "DEMO_REQUESTED",
+  "next_action": "follow_up_on_requested_next_step",
   "evidence_level": "sufficient",
   "score": 91,
   "temperature": "Very Hot",
@@ -464,6 +466,31 @@ The response contains the decision, score, temperature, evidence, breakdown, and
 ```
 
 The exact score and trace details depend on the configured rules and engine version. Treat the response as the source of truth rather than hard-coding the illustrative values above.
+
+`disposition` is one of the uppercase values in this enum:
+
+| Value | Meaning |
+| --- | --- |
+| `NEW` | Lead received but not yet evaluated |
+| `QUALIFIED` | Lead meets the qualification criteria |
+| `UNQUALIFIED` | Lead does not meet qualification criteria |
+| `NEEDS_INFORMATION` | More information is required to qualify |
+| `SALES_FOLLOW_UP` | Qualified and requires salesperson action |
+| `DEMO_REQUESTED` | Lead has requested a demo |
+| `NURTURE` | Potential lead, but not ready to engage now |
+| `CONTACTED` | Sales team has contacted the lead |
+| `NO_RESPONSE` | Attempts made but lead hasn't responded |
+| `NOT_INTERESTED` | Lead explicitly declined |
+| `BUDGET_NOT_AVAILABLE` | Interested but currently lacks budget |
+| `TIMING_NOT_RIGHT` | Potential opportunity but timing isn't suitable |
+| `DISQUALIFIED` | Lead fails one or more hard qualification rules |
+| `DUPLICATE` | Duplicate of an existing lead |
+| `CONVERTED` | Lead converted to an opportunity/customer |
+| `LOST` | Lead/opportunity was pursued but ultimately lost |
+
+For an evaluation response, the engine sets `DEMO_REQUESTED` when a configured next-step signal's key or label identifies a demo request; another detected next-step signal produces `SALES_FOLLOW_UP`. A qualified lead with no next-step signal is `NURTURE` when its temperature is Cold or Warm, otherwise `QUALIFIED`. Hard disqualifications map to `NOT_INTERESTED`, `BUDGET_NOT_AVAILABLE`, or `TIMING_NOT_RIGHT` when the configured disqualification key/label identifies that reason; otherwise they map to `DISQUALIFIED`. Insufficient evidence maps to `NEEDS_INFORMATION`; other failed qualification maps to `UNQUALIFIED`.
+
+The remaining values (`NEW`, `CONTACTED`, `NO_RESPONSE`, `DUPLICATE`, `CONVERTED`, and `LOST`) are part of the shared enum for use by client/CRM lifecycle workflows. The qualification engine does not infer those states during evaluation. `next_action` remains a separate recommendation field; its values are `follow_up_on_requested_next_step`, `sales_follow_up`, `request_more_information`, `suppress_contact`, and `nurture_or_manual_review`.
 
 Save the returned evaluation ID:
 
@@ -628,7 +655,29 @@ A client application can implement the following workflow:
 
 Header names are case-insensitive, but the values must be exact. For example, `change-me` is not the same as the default configured value `change-me-admin-key`.
 
-## 15. Common errors
+## 15. Analyzer selection and LLM behavior
+
+Analyzer selection is controlled by `ANALYZER` in the engine's environment configuration:
+
+- `rule_based`: deterministic phrase, regex, and configured attribute extraction; no model API calls.
+- `llm`: semantic rule matching and attribute extraction use the configured OpenAI-compatible chat completions API.
+- `hybrid`: try deterministic matching/extraction first; ask the LLM only when a rule does not match or an attribute was not captured. If an LLM operation fails, log the failure and keep the deterministic result.
+
+The current `.env` excerpt sets `ANALYZER=hybrid`, so an evaluation may call the model for unmatched rule checks or uncaptured attributes, but its qualification decision and final score are still determined by the engine's Python pipeline. Requirements policy, disqualification handling, evidence sufficiency, intent calculation, scoring, temperature assignment, disposition, and next-action recommendations are not delegated to the LLM.
+
+Relevant implementation locations:
+
+- `app/engine/factory.py` selects the analyzer from `ANALYZER` and falls back to rule-based mode if no OpenAI key is configured.
+- `app/engine/analyzer.py` contains deterministic phrase/regex matching and attribute extraction.
+- `app/engine/llm_analyzer.py` defines `_RULE_SYSTEM_PROMPT` and `_ATTRIBUTE_SYSTEM_PROMPT`, builds the JSON payload, and sends the chat completion request in `_complete()`.
+- `app/engine/steps/understanding.py` collects template requirements, disqualification criteria, signals, and attributes through the selected analyzer.
+- `app/engine/pipeline.py` runs the decision steps; the steps under `app/engine/steps/` determine qualification, score, temperature, disposition, and next action.
+
+The evaluation trace identifies the configured analyzer (for example, `hybrid`), and the database stores that analyzer name. In hybrid mode this does not prove that a particular evaluation made an LLM request: the current API does not expose a per-evaluation LLM-call flag or count. Provider request logs are needed to confirm individual calls.
+
+When using `hybrid` or `llm`, transcript text and configured matching/extraction context may be sent to the configured model provider. Review the provider's data handling terms and your organization's privacy requirements before enabling it. Keep `OPENAI_API_KEY` private; if a key has been exposed, revoke it and replace it. Restart the engine after changing analyzer or key settings because the pipeline is cached.
+
+## 16. Common errors
 
 ### Invalid or missing admin key
 
@@ -665,7 +714,7 @@ Typical validation problems include:
 
 FastAPI returns HTTP `422` with details describing the invalid field.
 
-## 16. Minimal Python client example
+## 17. Minimal Python client example
 
 The following code shows the same lifecycle from another Python application. Install the HTTP client first:
 
@@ -786,7 +835,7 @@ print({
 })
 ```
 
-## 17. API endpoint summary
+## 18. API endpoint summary
 
 | Method | Endpoint | Auth | Purpose |
 | --- | --- | --- | --- |
