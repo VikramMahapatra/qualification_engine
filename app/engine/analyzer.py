@@ -4,7 +4,7 @@ import re
 from abc import ABC, abstractmethod
 
 from app.domain.enums import AttributeType, SpeakerRole
-from app.domain.matching import Evidence, MatchResult, MatchRule
+from app.domain.matching import Evidence, MatchResult, MatchRule, RuleConcept
 from app.domain.results import AttributeOutcome
 from app.domain.template import BusinessAttribute
 from app.domain.transcript import ConversationTranscript, TranscriptMessage
@@ -36,7 +36,12 @@ class TranscriptAnalyzer(ABC):
     name: str = "abstract"
 
     @abstractmethod
-    def evaluate_rule(self, transcript: ConversationTranscript, rule: MatchRule) -> MatchResult: ...
+    def evaluate_rule(
+        self,
+        transcript: ConversationTranscript,
+        rule: MatchRule,
+        concept: RuleConcept | None = None,
+    ) -> MatchResult: ...
 
     @abstractmethod
     def extract_attribute(
@@ -51,7 +56,12 @@ class RuleBasedAnalyzer(TranscriptAnalyzer):
 
     # -- rules -------------------------------------------------------------------------
 
-    def evaluate_rule(self, transcript: ConversationTranscript, rule: MatchRule) -> MatchResult:
+    def evaluate_rule(
+        self,
+        transcript: ConversationTranscript,
+        rule: MatchRule,
+        concept: RuleConcept | None = None,
+    ) -> MatchResult:
         scoped = transcript.messages_for(rule.speakers)
         if not scoped:
             return MatchResult.no_match("No messages for the configured speakers")

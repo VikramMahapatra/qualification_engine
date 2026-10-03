@@ -44,6 +44,18 @@ class Evidence(BaseModel):
     matched_term: str
 
 
+class RuleConcept(BaseModel):
+    """What a rule means in business terms, for analyzers that judge meaning rather than wording."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str = Field(description="e.g. 'qualification requirement', 'positive signal'.")
+    label: str
+    description: str | None = None
+    category: str | None = None
+    campaign_objective: str | None = None
+
+
 class MatchResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

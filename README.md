@@ -5,7 +5,7 @@ qualification template** into a deterministic, fully auditable qualification dec
 
 > `Qualified + Lead Score (1-100) + Temperature + Positive/Negative outcome`
 
-It is completely independent of any other codebase: its own FastAPI app, its own database, its own
+It is completely independent of any other codebase: its own FastAPI app, its own database, its own 
 domain model.
 
 ---
@@ -290,3 +290,49 @@ index, speaker and quote that produced the decision.
 | `LOG_LEVEL` | `INFO` | |
 
 Secrets live in `.env`, which is gitignored. Never commit a real API key.
+
+
+## SQL
+-- 1. Summary
+SELECT id, tenant_id, project_id, conversation_transcript_id, template_id, template_version,
+       analyzer, status, qualified, score, temperature, created_at
+FROM evaluations
+WHERE conversation_transcript_id = 'session_1790840106971_6520'
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- 2. Score per area against its weight
+SELECT json_extract(c.value, '$.dimension')              AS area,
+       json_extract(c.value, '$.weight')                 AS weight,
+       ROUND(json_extract(c.value, '$.weight') * 100, 2) AS max_points,
+       json_extract(c.value, '$.ratio')                  AS ratio,
+       json_extract(c.value, '$.contribution')           AS points
+FROM evaluations e, json_each(e.result, '$.score_breakdown.components') c
+WHERE e.id = (
+    SELECT id FROM evaluations
+    WHERE conversation_transcript_id = 'session_1790840106971_6520'
+    ORDER BY created_at DESC LIMIT 1
+);
+
+-- 3. Totals
+SELECT json_extract(result, '$.score_breakdown.raw_score')   AS raw_score,
+       json_extract(result, '$.score_breakdown.penalty')     AS penalty,
+       json_extract(result, '$.score_breakdown.final_score') AS final_score,
+       temperature
+FROM evaluations
+WHERE conversation_transcript_id = 'session_1790840106971_6520'
+ORDER BY created_at DESC
+LIMIT 1;
+
+## Running the engine from Python
+
+Run these from the project root. The analyzer used is whatever ANALYZER is set to in .env (currently llm).
+
+# Full request payload (project_id and template_id are read from the file); result is saved to the DB
+.\.venv\Scripts\python.exe -m scripts.run_transcript data\transcripts\session_1790840106971_6520.json --tenant-id f7eedbe0-12a2-48db-ae57-82f9edf05a4f --output data\transcripts\result.json
+
+# Test run that is NOT saved
+.\.venv\Scripts\python.exe -m scripts.run_transcript data\transcripts\session_1790840106971_6520.json --tenant-id f7eedbe0-12a2-48db-ae57-82f9edf05a4f --dry-run --output data\transcripts\result.json
+
+# Bare transcript file: pass the IDs on the command line
+.\.venv\Scripts\python.exe -m scripts.run_transcript data\transcripts\session_1778724817027_6418.json --tenant-id f7eedbe0-12a2-48db-ae57-82f9edf05a4f --template-id cf5504ae-2d3e-41f2-9697-c78179a5e093 --project-id org_1_qualification --dry-run --output data\transcripts\result.json

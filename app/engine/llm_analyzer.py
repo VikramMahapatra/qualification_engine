@@ -9,7 +9,7 @@ import httpx
 from app.core.config import Settings
 from app.core.exceptions import EngineError
 from app.domain.enums import AttributeType
-from app.domain.matching import Evidence, MatchResult, MatchRule
+from app.domain.matching import Evidence, MatchResult, MatchRule, RuleConcept
 from app.domain.results import AttributeOutcome
 from app.domain.template import BusinessAttribute
 from app.domain.transcript import ConversationTranscript
@@ -19,14 +19,27 @@ from app.engine.scoring_model import importance_weight
 logger = logging.getLogger(__name__)
 
 _RULE_SYSTEM_PROMPT = (
-    "You are a lead qualification analyst. Decide whether a conversation transcript supports a "
-    "concept. Judge meaning, not exact wording. Only use what the listed speakers actually said. "
-    'Reply with JSON: {"matched": bool, "confidence": 0.0-1.0, "quote": string, "reason": string}. '
-    "Leave quote empty when nothing supports the concept."
+    "You are a lead qualification analyst. Decide whether a sales conversation transcript shows "
+    "the given concept.\n"
+    "- Judge meaning, not wording. The concept's label and description define it; the example "
+    "phrases are illustrations only and need not appear.\n"
+    "- The transcript is speech-to-text from a phone call: expect recognition errors, filler words, "
+    "and sentences split across consecutive messages. Read consecutive messages together.\n"
+    "- Only the speakers in speakers_to_consider can satisfy the concept. Read other speakers for "
+    "context: if the agent proposes something and the customer accepts it (e.g. 'yes', 'sure', or "
+    "gives a date/time), the customer has expressed it. Agent statements alone never count.\n"
+    "- Do not stretch: tangential or merely compatible statements do not count.\n"
+    "- must_mention_all_of and must_not_mention are strict conditions on meaning.\n"
+    'Reply with JSON: {"matched": bool, "confidence": 0.0-1.0, "message_index": int|null, '
+    '"quote": string, "reason": string}. message_index and quote must point to a single message '
+    "from an allowed speaker; quote is copied verbatim from it. Leave quote empty and "
+    "message_index null when nothing supports the concept."
 )
 
 _ATTRIBUTE_SYSTEM_PROMPT = (
     "You are a lead qualification analyst extracting a single business attribute from a transcript. "
+    "The transcript is speech-to-text from a phone call; expect recognition errors and sentences "
+    "split across messages. "
     'Reply with JSON: {"captured": bool, "value": string|number|boolean|null, "fit_score": 0.0-1.0, '
     '"quote": string, "reason": string}. Return captured=false when the customer never stated it.'
 )
@@ -48,30 +61,43 @@ class LLMAnalyzer(TranscriptAnalyzer):
         )
         self._cache: dict[str, Any] = {}
 
-    def evaluate_rule(self, transcript: ConversationTranscript, rule: MatchRule) -> MatchResult:
-        cache_key = f"rule:{transcript.conversation_transcript_id}:{hash(rule.model_dump_json())}"
+    def evaluate_rule(
+        self,
+        transcript: ConversationTranscript,
+        rule: MatchRule,
+        concept: RuleConcept | None = None,
+    ) -> MatchResult:
+        concept_json = concept.model_dump_json() if concept else ""
+        cache_key = (
+            f"rule:{transcript.conversation_transcript_id}:{hash(rule.model_dump_json() + concept_json)}"
+        )
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        concept = {
-            "should_mention_any_of": rule.any_of,
-            "must_mention_all_of": rule.all_of,
-            "must_not_mention": rule.none_of,
-            "patterns": rule.regex,
-        }
         payload = {
-            "concept": concept,
+            "concept": {
+                **(concept.model_dump(exclude_none=True) if concept else {}),
+                "example_phrases": rule.any_of,
+                "must_mention_all_of": rule.all_of,
+                "must_not_mention": rule.none_of,
+                "patterns": rule.regex,
+            },
             "speakers_to_consider": [str(s) for s in rule.speakers],
             "transcript": self._render(transcript),
         }
         data = self._complete(_RULE_SYSTEM_PROMPT, payload)
 
         matched = bool(data.get("matched"))
+        evidence = self._rule_evidence(transcript, rule, data.get("message_index"), data.get("quote"))
+        reason = str(data.get("reason", ""))[:500]
+        if matched and not evidence:
+            matched = False
+            reason = f"No supporting statement from {', '.join(map(str, rule.speakers))}: {reason}"[:500]
         result = MatchResult(
             matched=matched,
-            confidence=self._clamp(data.get("confidence", 0.6 if matched else 0.0)),
-            evidence=self._evidence(transcript, data.get("quote"), "llm"),
-            reason=str(data.get("reason", ""))[:500],
+            confidence=self._clamp(data.get("confidence", 0.6)) if matched else 0.0,
+            evidence=evidence,
+            reason=reason,
         )
         self._cache[cache_key] = result
         return result
@@ -146,6 +172,37 @@ class LLMAnalyzer(TranscriptAnalyzer):
         ]
 
     @staticmethod
+    def _rule_evidence(
+        transcript: ConversationTranscript, rule: MatchRule, index: Any, quote: Any
+    ) -> list[Evidence]:
+        """Pin the model's evidence to a real message from an allowed speaker."""
+        allowed = dict(transcript.messages_for(rule.speakers))
+        text = quote.strip() if isinstance(quote, str) else ""
+        if isinstance(index, int) and not isinstance(index, bool) and index in allowed:
+            message = allowed[index]
+            in_message = text and text.lower() in message.text.lower()
+            return [
+                Evidence(
+                    message_index=index,
+                    speaker=message.speaker,
+                    quote=(text if in_message else message.text.strip())[:400],
+                    matched_term="llm",
+                )
+            ]
+        if text:
+            for message_index, message in allowed.items():
+                if text.lower() in message.text.lower():
+                    return [
+                        Evidence(
+                            message_index=message_index,
+                            speaker=message.speaker,
+                            quote=text[:400],
+                            matched_term="llm",
+                        )
+                    ]
+        return []
+
+    @staticmethod
     def _evidence(
         transcript: ConversationTranscript, quote: Any, matched_term: str
     ) -> list[Evidence]:
@@ -191,12 +248,17 @@ class HybridAnalyzer(TranscriptAnalyzer):
         self._rules = rules or RuleBasedAnalyzer()
         self._llm = llm
 
-    def evaluate_rule(self, transcript: ConversationTranscript, rule: MatchRule) -> MatchResult:
+    def evaluate_rule(
+        self,
+        transcript: ConversationTranscript,
+        rule: MatchRule,
+        concept: RuleConcept | None = None,
+    ) -> MatchResult:
         deterministic = self._rules.evaluate_rule(transcript, rule)
         if deterministic.matched:
             return deterministic
         try:
-            return self._llm.evaluate_rule(transcript, rule)
+            return self._llm.evaluate_rule(transcript, rule, concept)
         except EngineError:
             logger.warning("LLM rule evaluation failed; falling back to rule-based result", exc_info=True)
             return deterministic

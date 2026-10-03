@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.domain.enums import PipelineStep, SpeakerRole
+from app.domain.matching import RuleConcept
 from app.engine.context import EvaluationContext
 from app.engine.steps.base import DecisionStep
 
@@ -38,19 +39,44 @@ class IdentifyObservationsStep(DecisionStep):
         analyzer = context.analyzer
         transcript = context.transcript
         observations = context.observations
+        objective = template.campaign_objective.objective
 
         for requirement in template.qualified_lead_requirements.requirements:
             observations.requirement_matches[requirement.key] = analyzer.evaluate_rule(
-                transcript, requirement.rule
+                transcript,
+                requirement.rule,
+                RuleConcept(
+                    kind="qualification requirement",
+                    label=requirement.label,
+                    description=requirement.description or None,
+                    category=str(requirement.kind),
+                    campaign_objective=objective,
+                ),
             )
 
         for criterion in template.disqualification_criteria.criteria:
             observations.disqualification_matches[criterion.key] = analyzer.evaluate_rule(
-                transcript, criterion.rule
+                transcript,
+                criterion.rule,
+                RuleConcept(
+                    kind="disqualification criterion",
+                    label=criterion.label,
+                    category=str(criterion.severity),
+                    campaign_objective=objective,
+                ),
             )
 
         for signal in template.positive_signals.signals:
-            observations.signal_matches[signal.key] = analyzer.evaluate_rule(transcript, signal.rule)
+            observations.signal_matches[signal.key] = analyzer.evaluate_rule(
+                transcript,
+                signal.rule,
+                RuleConcept(
+                    kind="positive buying signal",
+                    label=signal.label,
+                    category=str(signal.category),
+                    campaign_objective=objective,
+                ),
+            )
 
         for attribute in template.business_attributes.attributes:
             observations.attribute_outcomes[attribute.key] = analyzer.extract_attribute(

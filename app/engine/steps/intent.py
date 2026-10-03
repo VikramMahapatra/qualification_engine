@@ -3,7 +3,12 @@ from __future__ import annotations
 from app.domain.enums import PipelineStep, ScoreDimension
 from app.domain.results import IntentAssessment, SignalOutcome, SignalsSummary
 from app.engine.context import EvaluationContext
-from app.engine.scoring_model import INTENT_DIMENSIONS, SIGNAL_CATEGORY_DIMENSION, normalized_weights
+from app.engine.scoring_model import (
+    INTENT_DIMENSIONS,
+    SIGNAL_CATEGORY_DIMENSION,
+    dimension_strength,
+    normalized_weights,
+)
 from app.engine.steps.base import DecisionStep
 
 _QUESTION_MARK = "?"
@@ -72,8 +77,8 @@ class EvaluateIntentStep(DecisionStep):
         dimension_coverage: dict[ScoreDimension, float] = {}
         for dimension in {SIGNAL_CATEGORY_DIMENSION[o.category] for o in outcomes}:
             in_dimension = [o for o in outcomes if SIGNAL_CATEGORY_DIMENSION[o.category] is dimension]
-            dimension_coverage[dimension] = round(
-                sum(1 for o in in_dimension if o.detected) / len(in_dimension), 4
+            dimension_coverage[dimension] = dimension_strength(
+                [o.confidence for o in in_dimension if o.detected]
             )
 
         return SignalsSummary(
