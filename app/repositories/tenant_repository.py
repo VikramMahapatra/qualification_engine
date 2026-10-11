@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db.models.tenant import Project, Tenant
 from app.repositories.base import SQLAlchemyRepository
@@ -30,5 +31,19 @@ class ProjectRepository(SQLAlchemyRepository[Project]):
     def get_or_create(self, tenant_id: str, external_id: str) -> Project:
         existing = self.get_by_external_id(tenant_id, external_id)
         if existing is not None:
+            return existing
+        if self.session.get_bind().dialect.name == "postgresql":
+            # Another request may create this project after our initial SELECT.
+            stmt = (
+                pg_insert(Project)
+                .values(tenant_id=tenant_id, external_id=external_id)
+                .on_conflict_do_nothing(constraint="uq_projects_tenant_external")
+                .returning(Project)
+            )
+            created = self.session.execute(stmt).scalar_one_or_none()
+            if created is not None:
+                return created
+            existing = self.get_by_external_id(tenant_id, external_id)
+            assert existing is not None
             return existing
         return self.add(Project(tenant_id=tenant_id, external_id=external_id))

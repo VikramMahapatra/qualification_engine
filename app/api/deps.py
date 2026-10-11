@@ -49,7 +49,7 @@ def get_template_service(session: DbSession) -> TemplateService:
 
 
 def get_evaluation_service(session: DbSession) -> EvaluationService:
-    return EvaluationService(session, get_pipeline())
+    return EvaluationService(session, get_pipeline(), release_read_transaction=True)
 
 
 TenantServiceDep = Annotated[TenantService, Depends(get_tenant_service)]

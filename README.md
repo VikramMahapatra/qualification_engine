@@ -148,6 +148,49 @@ Copy-Item .env.example .env      # then edit ADMIN_API_KEY (and OPENAI_API_KEY i
 
 Interactive docs: <http://localhost:8100/docs>
 
+### PostgreSQL database
+
+Copy the database settings from [.env.example](.env.example) to your local `.env` and set
+`DB_USER`, `DB_PASS`, `DB_HOST`, `DB_PORT`, `DB_NAME` and `DB_SSLMODE`.
+The application uses the psycopg 3 driver and constructs the connection URL safely, so passwords
+containing special characters do not require manual URL encoding. `.env` is excluded from Git.
+
+* `DB_SSLMODE=require` requires an encrypted connection. Use `verify-full` with a trusted CA
+  configuration when server identity verification is required.
+* `DB_CONNECT_TIMEOUT_SECONDS` defaults to 10. Connection pooling defaults to 5 connections
+  plus 10 overflow connections **per worker**; tune these to the database connection limit.
+* An explicit `DATABASE_URL` overrides all `DB_*` settings. Remove an old SQLite override when
+  switching to PostgreSQL. Without either configuration, local SQLite remains the fallback.
+* Evaluation analysis runs before project/conversation writes. PostgreSQL atomic upserts handle
+  concurrent creation of the same project or transcript; evaluation persistence stays transactional.
+* Startup creates missing tables in the existing database. The configured role needs schema/table
+  creation privileges. This is not a schema migration mechanism for existing tables.
+* Existing SQLite tenants, API keys, templates and evaluations are **not copied automatically**.
+  Provision new records or perform a separate data migration before reusing old IDs/API keys.
+
+The database server must accept connections from the application's IP, including its firewall,
+AWS security group, and PostgreSQL access rules. Do not expose port 5432 to the entire internet.
+
+### Migrating existing SQLite data
+
+[scripts/migrate_sqlite_to_postgres.py](scripts/migrate_sqlite_to_postgres.py) copies all six
+application tables to PostgreSQL configured in `.env`. Run the module
+`scripts.migrate_sqlite_to_postgres` from the project root. The default source is the original
+SQLite database under `data`; repeat `--source` with each SQLite path to merge multiple files.
+
+* Stop application writers before migration/cutover. Each source is captured using SQLite's
+  online backup API, including committed WAL data; original databases are never modified.
+* Verified backups are retained under `data/migration_backups` (Git-ignored). They contain
+  sensitive application data; restrict access and retain them until migration is confirmed.
+* `--dry-run` executes the copy and verification, then rolls back all destination writes.
+* All sources are imported together in one PostgreSQL transaction in foreign-key order.
+  Destination writers are blocked during migration; acquiring locks times out after 15 seconds.
+* IDs, tenant API-key hashes, templates, timestamps, JSON, evaluations and findings are preserved.
+  Naive SQLite application timestamps are interpreted as UTC.
+* Every copied field is verified. Identical existing rows are skipped, making reruns safe.
+  Conflicting data aborts and rolls back; the script never overwrites or deletes destination rows.
+* Destination tables must already exist (start the app once to initialize them).
+
 Tests:
 
 ```powershell

@@ -3,6 +3,7 @@ uvicorn[standard]>=0.37
 pydantic>=2.12
 pydantic-settings>=2.11
 SQLAlchemy>=2.0.44
+psycopg[binary]>=3.2.10,<4
 python-dotenv>=1.1
 httpx>=0.28
 pytest>=8.4

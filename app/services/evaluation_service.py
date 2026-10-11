@@ -23,9 +23,16 @@ logger = logging.getLogger(__name__)
 class EvaluationService:
     """Application service: resolves inputs, runs the decision flow and records everything."""
 
-    def __init__(self, session: Session, pipeline: QualificationPipeline) -> None:
+    def __init__(
+        self,
+        session: Session,
+        pipeline: QualificationPipeline,
+        *,
+        release_read_transaction: bool = False,
+    ) -> None:
         self._session = session
         self._pipeline = pipeline
+        self._release_read_transaction = release_read_transaction
         self._conversations = ConversationRepository(session)
         self._evaluations = EvaluationRepository(session)
         self._projects = ProjectRepository(session)
@@ -33,15 +40,21 @@ class EvaluationService:
 
     def evaluate(self, tenant_id: str, request: EvaluationRequest) -> EvaluationResult:
         template, template_id = self._resolve_template(tenant_id, request)
-        self._projects.get_or_create(tenant_id, request.project_id)
-        conversation = self._store_conversation(tenant_id, request.project_id, request.transcript)
+        if self._release_read_transaction:
+            # The API session has only read authentication/template data so far.
+            # Release its connection while analyzing. Caller-managed transactions
+            # (demo provisioning and CLI dry-runs) retain their existing semantics.
+            self._session.rollback()
 
+        # Never acquire write locks before potentially slow LLM/network calls.
         result = self._pipeline.run(
             tenant_id=tenant_id,
             project_id=request.project_id,
             transcript=request.transcript,
             template=template,
         )
+        self._projects.get_or_create(tenant_id, request.project_id)
+        conversation = self._store_conversation(tenant_id, request.project_id, request.transcript)
         self._store_evaluation(result, conversation, template, template_id)
         logger.info(
             "Evaluation %s for project %s: %s score=%s temperature=%s",
@@ -106,27 +119,7 @@ class EvaluationService:
     def _store_conversation(
         self, tenant_id: str, project_id: str, transcript: ConversationTranscript
     ) -> ConversationRecord:
-        payload = transcript.model_dump(mode="json")
-        existing = self._conversations.find(
-            tenant_id, project_id, transcript.conversation_transcript_id
-        )
-        if existing is not None:
-            existing.payload = payload
-            existing.message_count = len(transcript.messages)
-            existing.channel = transcript.channel
-            existing.language = transcript.language
-            return existing
-        return self._conversations.add(
-            ConversationRecord(
-                tenant_id=tenant_id,
-                project_id=project_id,
-                conversation_transcript_id=transcript.conversation_transcript_id,
-                channel=transcript.channel,
-                language=transcript.language,
-                message_count=len(transcript.messages),
-                payload=payload,
-            )
-        )
+        return self._conversations.store(tenant_id, project_id, transcript)
 
     def _store_evaluation(
         self,
